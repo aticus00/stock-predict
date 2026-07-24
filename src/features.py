@@ -9,6 +9,7 @@ FEATURE_COLUMNS = [
     "ma5_ma20_gap",
     "volatility_20",
     "rsi_14",
+    "macd_hist",
     "volume_ratio_20",
     "momentum_5",
     "momentum_10",
@@ -43,6 +44,9 @@ def build_features(
     feat["ma5_ma20_gap"] = ma5 / ma20 - 1
     feat["volatility_20"] = feat["return_1d"].rolling(20).std()
     feat["rsi_14"] = _rsi(close)
+    macd = close.ewm(span=12, adjust=False).mean() - close.ewm(span=26, adjust=False).mean()
+    macd_signal = macd.ewm(span=9, adjust=False).mean()
+    feat["macd_hist"] = (macd - macd_signal) / close
     feat["volume_ratio_20"] = volume / volume.rolling(20).mean()
     feat["momentum_5"] = close / close.shift(5) - 1
     feat["momentum_10"] = close / close.shift(10) - 1

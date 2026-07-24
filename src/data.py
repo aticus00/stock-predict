@@ -10,12 +10,16 @@ import FinanceDataReader as fdr
 import pandas as pd
 import streamlit as st
 
-LOOKBACK_YEARS = {"1년": 1, "3년": 3, "5년": 5}
+DISPLAY_WINDOWS = {"6개월": 0.5, "1년": 1, "3년": 3}
+
+# Model training always uses this much history regardless of the chart's
+# display window, so shortening the chart doesn't starve the model of data.
+TRAIN_YEARS = 3
 
 
 @st.cache_data(ttl=3600)
-def fetch_ohlcv(code: str, years: int) -> pd.DataFrame:
-    start = dt.date.today() - dt.timedelta(days=365 * years)
+def fetch_ohlcv(code: str, years: float = TRAIN_YEARS) -> pd.DataFrame:
+    start = dt.date.today() - dt.timedelta(days=int(365 * years))
     df = fdr.DataReader(code.zfill(6), start.isoformat())
     return df[["Open", "High", "Low", "Close", "Volume"]].dropna()
 

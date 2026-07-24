@@ -8,11 +8,17 @@ from features import build_features
 
 
 def _make_model() -> RandomForestClassifier:
-    return RandomForestClassifier(n_estimators=200, max_depth=5, random_state=0)
+    # min_samples_leaf is deliberately large: daily price/volume features are
+    # noisy, and letting the forest carve out tiny leaves just memorizes noise.
+    return RandomForestClassifier(
+        n_estimators=300, max_depth=5, min_samples_leaf=20, random_state=0
+    )
 
 
 def _make_regressor() -> RandomForestRegressor:
-    return RandomForestRegressor(n_estimators=200, max_depth=5, random_state=0)
+    return RandomForestRegressor(
+        n_estimators=300, max_depth=5, min_samples_leaf=20, random_state=0
+    )
 
 
 def evaluate_walk_forward(X: pd.DataFrame, y: pd.Series, n_splits: int = 5) -> float:
@@ -25,6 +31,22 @@ def evaluate_walk_forward(X: pd.DataFrame, y: pd.Series, n_splits: int = 5) -> f
         model = _make_model()
         model.fit(X.iloc[train_idx], y.iloc[train_idx])
         preds = model.predict(X.iloc[test_idx])
+        scores.append(accuracy_score(y.iloc[test_idx], preds))
+    return sum(scores) / len(scores)
+
+
+def evaluate_baseline_walk_forward(y: pd.Series, n_splits: int = 5) -> float:
+    """Same walk-forward folds as evaluate_walk_forward, but always predicts
+    the training fold's majority class. Context for whether the model is
+    actually learning anything beyond 'the market usually goes one way'."""
+    n_splits = min(n_splits, len(y) - 1)
+    if n_splits < 2:
+        return float("nan")
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+    scores = []
+    for train_idx, test_idx in tscv.split(y):
+        majority = y.iloc[train_idx].mode().iloc[0]
+        preds = [majority] * len(test_idx)
         scores.append(accuracy_score(y.iloc[test_idx], preds))
     return sum(scores) / len(scores)
 
