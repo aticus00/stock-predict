@@ -23,7 +23,15 @@ def _rsi(close: pd.Series, window: int = 14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
-def build_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
+def build_features(
+    df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.Series, pd.Series, pd.DataFrame]:
+    """Return (X, y_up, y_return, latest_row).
+
+    y_up: next-day up/down classification label (0/1).
+    y_return: next-day pct return regression label, used for multi-day forecasting.
+    latest_row: unlabeled feature row for the most recent bar (used for live prediction).
+    """
     close, volume = df["Close"], df["Volume"]
 
     feat = pd.DataFrame(index=df.index)
@@ -40,13 +48,14 @@ def build_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, pd.DataFr
     feat["momentum_10"] = close / close.shift(10) - 1
 
     target_up = (close.shift(-1) > close).astype(int)
+    target_return = close.shift(-1) / close - 1
 
     latest_row = feat.iloc[[-1]]
     labeled = feat.iloc[:-1]
-    labeled_target = target_up.iloc[:-1]
 
     valid = labeled.notna().all(axis=1)
     X = labeled.loc[valid]
-    y = labeled_target.loc[valid]
+    y_up = target_up.iloc[:-1].loc[valid]
+    y_return = target_return.iloc[:-1].loc[valid]
 
-    return X, y, latest_row
+    return X, y_up, y_return, latest_row
