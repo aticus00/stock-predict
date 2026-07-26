@@ -11,7 +11,7 @@ from data import (
     get_krx_listing,
     index_code_for_market,
 )
-from features import build_features
+from features import FEATURE_LABELS, build_features
 from model import (
     evaluate_baseline_walk_forward,
     evaluate_walk_forward,
@@ -54,6 +54,20 @@ def build_chart(display_label: str, df: pd.DataFrame, display_years: float, fore
         font=dict(size=16),
         legend=dict(font=dict(size=15)),
         xaxis=dict(tickfont=dict(size=14)),
+        yaxis=dict(tickfont=dict(size=14)),
+    )
+    return fig
+
+
+def build_importance_chart(importances: pd.Series) -> go.Figure:
+    ordered = importances.sort_values(ascending=True)
+    labels = [FEATURE_LABELS.get(name, name) for name in ordered.index]
+    fig = go.Figure(go.Bar(x=ordered.values, y=labels, orientation="h"))
+    fig.update_layout(
+        height=380,
+        margin=dict(l=20, r=20, t=20, b=20),
+        font=dict(size=16),
+        xaxis=dict(title="중요도", tickfont=dict(size=14)),
         yaxis=dict(tickfont=dict(size=14)),
     )
     return fig
@@ -127,7 +141,7 @@ except Exception:
 
 run_prediction = st.button("예측 실행", type="primary")
 
-accuracy = baseline_accuracy = up_probability = forecast = None
+accuracy = baseline_accuracy = up_probability = forecast = feature_importances = None
 if run_prediction:
     if market_close is None:
         st.error("시장 지수 데이터를 가져오지 못해 예측을 실행할 수 없습니다. 잠시 후 다시 시도해주세요.")
@@ -141,6 +155,7 @@ if run_prediction:
                 baseline_accuracy = evaluate_baseline_walk_forward(y_up)
                 classifier = train_final_model(X, y_up)
                 up_probability = predict_latest(classifier, latest_row)
+                feature_importances = pd.Series(classifier.feature_importances_, index=X.columns)
 
                 regressor = train_return_regressor(X, y_return)
                 forecast = forecast_future_prices(df, regressor, n_forecast_days, market_close)
@@ -161,3 +176,7 @@ if accuracy is not None:
     st.caption(f"주황 점선은 {n_forecast_days}일치 예측 종가입니다. 하루 예측을 반복 적용한 값이라 기간이 길수록 오차가 누적됩니다.")
     st.caption(f"시장 대비 상대강도는 {market_name} 지수({index_code}) 대비 20일 수익률 차이를 특징으로 사용합니다.")
     st.info(DISCLAIMER)
+
+    st.subheader("특징 중요도")
+    st.plotly_chart(build_importance_chart(feature_importances), width="stretch")
+    st.caption("모델이 '내일 상승 확률'을 계산할 때 각 특징에 얼마나 의존했는지를 나타냅니다. 값이 클수록 영향력이 큽니다.")

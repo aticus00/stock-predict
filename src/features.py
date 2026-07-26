@@ -16,6 +16,21 @@ FEATURE_COLUMNS = [
     "market_rel_strength_20",
 ]
 
+FEATURE_LABELS = {
+    "return_1d": "전일 수익률",
+    "ma5_ratio": "종가/5일 이평 비율",
+    "ma20_ratio": "종가/20일 이평 비율",
+    "ma60_ratio": "종가/60일 이평 비율",
+    "ma5_ma20_gap": "5일-20일 이평 격차",
+    "volatility_20": "20일 변동성",
+    "rsi_14": "RSI(14일)",
+    "macd_hist": "MACD 히스토그램",
+    "volume_ratio_20": "거래량 비율(20일)",
+    "momentum_5": "5일 모멘텀",
+    "momentum_10": "10일 모멘텀",
+    "market_rel_strength_20": "시장 대비 상대강도(20일)",
+}
+
 
 def _rsi(close: pd.Series, window: int = 14) -> pd.Series:
     delta = close.diff()
