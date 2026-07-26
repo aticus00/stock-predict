@@ -22,6 +22,12 @@ BUNDLED_LISTING_PATH = Path(__file__).parent / "data_files" / "krx_listing.csv"
 # display window, so shortening the chart doesn't starve the model of data.
 TRAIN_YEARS = 3
 
+INDEX_CODES = {"KOSPI": "KS11", "KOSDAQ": "KQ11"}
+
+
+def index_code_for_market(market_name: str) -> str:
+    return INDEX_CODES["KOSDAQ"] if "KOSDAQ" in (market_name or "") else INDEX_CODES["KOSPI"]
+
 
 @st.cache_data(ttl=3600)
 def fetch_ohlcv(code: str, years: float = TRAIN_YEARS) -> pd.DataFrame:
@@ -30,11 +36,18 @@ def fetch_ohlcv(code: str, years: float = TRAIN_YEARS) -> pd.DataFrame:
     return df[["Open", "High", "Low", "Close", "Volume"]].dropna()
 
 
+@st.cache_data(ttl=3600)
+def fetch_index_close(index_code: str, years: float = TRAIN_YEARS) -> pd.Series:
+    start = dt.date.today() - dt.timedelta(days=int(365 * years))
+    df = fdr.DataReader(index_code, start.isoformat())
+    return df["Close"].dropna()
+
+
 @st.cache_data(ttl=86400)
 def get_krx_listing() -> pd.DataFrame:
     try:
         listing = fdr.StockListing("KRX")
-        return listing[["Code", "Name"]].dropna()
+        return listing[["Code", "Name", "Market"]].dropna()
     except Exception:
         listing = pd.read_csv(BUNDLED_LISTING_PATH, dtype={"Code": str})
         return listing.dropna()

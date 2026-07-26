@@ -70,18 +70,24 @@ def train_return_regressor(X: pd.DataFrame, y_return: pd.Series) -> RandomForest
 
 
 def forecast_future_prices(
-    df: pd.DataFrame, regressor: RandomForestRegressor, n_days: int
+    df: pd.DataFrame,
+    regressor: RandomForestRegressor,
+    n_days: int,
+    market_close: pd.Series,
 ) -> pd.Series:
     """Iteratively apply the regressor's predicted next-day return to project
-    a rough N-day price path. Volume is held at its last observed value since
-    future volume is unknown. Error compounds with each step — illustrative
-    only, not a reliable forecast."""
+    a rough N-day price path. Volume and the market index are held at their
+    last observed value since future values are unknown. Error compounds
+    with each step — illustrative only, not a reliable forecast."""
     sim_df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
     last_volume = sim_df["Volume"].iloc[-1]
 
+    sim_market_close = market_close.reindex(sim_df.index).ffill().bfill()
+    last_market_close = sim_market_close.iloc[-1]
+
     forecast_dates, forecast_prices = [], []
     for _ in range(n_days):
-        _, _, _, latest_row = build_features(sim_df)
+        _, _, _, latest_row = build_features(sim_df, sim_market_close)
         predicted_return = float(regressor.predict(latest_row)[0])
         next_close = sim_df["Close"].iloc[-1] * (1 + predicted_return)
         next_date = sim_df.index[-1] + pd.tseries.offsets.BDay(1)
@@ -93,6 +99,7 @@ def forecast_future_prices(
             "Close": next_close,
             "Volume": last_volume,
         }
+        sim_market_close.loc[next_date] = last_market_close
         forecast_dates.append(next_date)
         forecast_prices.append(next_close)
 
