@@ -13,6 +13,7 @@ FEATURE_COLUMNS = [
     "volume_ratio_20",
     "momentum_5",
     "momentum_10",
+    "market_rel_strength_20",
 ]
 
 
@@ -26,14 +27,18 @@ def _rsi(close: pd.Series, window: int = 14) -> pd.Series:
 
 def build_features(
     df: pd.DataFrame,
+    market_close: pd.Series,
 ) -> tuple[pd.DataFrame, pd.Series, pd.Series, pd.DataFrame]:
     """Return (X, y_up, y_return, latest_row).
 
+    market_close: KOSPI/KOSDAQ index close series (whichever market the stock
+    is listed on), used to compute relative strength vs. the broader market.
     y_up: next-day up/down classification label (0/1).
     y_return: next-day pct return regression label, used for multi-day forecasting.
     latest_row: unlabeled feature row for the most recent bar (used for live prediction).
     """
     close, volume = df["Close"], df["Volume"]
+    market_close = market_close.reindex(df.index).ffill().bfill()
 
     feat = pd.DataFrame(index=df.index)
     feat["return_1d"] = close.pct_change()
@@ -50,6 +55,9 @@ def build_features(
     feat["volume_ratio_20"] = volume / volume.rolling(20).mean()
     feat["momentum_5"] = close / close.shift(5) - 1
     feat["momentum_10"] = close / close.shift(10) - 1
+    stock_return_20 = close / close.shift(20) - 1
+    market_return_20 = market_close / market_close.shift(20) - 1
+    feat["market_rel_strength_20"] = stock_return_20 - market_return_20
 
     target_up = (close.shift(-1) > close).astype(int)
     target_return = close.shift(-1) / close - 1

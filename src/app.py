@@ -3,7 +3,14 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from data import DISPLAY_WINDOWS, TRAIN_YEARS, fetch_ohlcv, get_krx_listing
+from data import (
+    DISPLAY_WINDOWS,
+    TRAIN_YEARS,
+    fetch_index_close,
+    fetch_ohlcv,
+    get_krx_listing,
+    index_code_for_market,
+)
 from features import build_features
 from model import (
     evaluate_baseline_walk_forward,
@@ -80,14 +87,17 @@ if listing is not None:
         choice = col_select.selectbox("종목 선택", options)
         code = choice.split("(")[-1].rstrip(")")
         display_label = choice
+        market_name = matches[matches["Code"] == code].iloc[0]["Market"]
     else:
         col_select.info("검색 결과가 없습니다. 종목 코드를 직접 입력하세요.")
         code = col_select.text_input("종목 코드 (6자리)", "005930")
         match = listing[listing["Code"] == code.zfill(6)]
         display_label = f"{match.iloc[0].Name} ({code})" if not match.empty else code
+        market_name = match.iloc[0]["Market"] if not match.empty else "KOSPI"
 else:
     code = col_search.text_input("종목 코드 (6자리)", "005930")
     display_label = code
+    market_name = "KOSPI"
 
 col_period, col_forecast = st.columns(2)
 display_label_period = col_period.selectbox("차트 표시 기간", list(DISPLAY_WINDOWS.keys()), index=0)
@@ -109,22 +119,31 @@ if df.empty:
     st.error("해당 종목의 데이터가 없습니다. 종목 코드를 확인해주세요.")
     st.stop()
 
+index_code = index_code_for_market(market_name)
+try:
+    market_close = fetch_index_close(index_code)
+except Exception:
+    market_close = None
+
 run_prediction = st.button("예측 실행", type="primary")
 
 accuracy = baseline_accuracy = up_probability = forecast = None
 if run_prediction:
-    X, y_up, y_return, latest_row = build_features(df)
-    if len(X) < 30:
-        st.error("예측을 위한 데이터가 충분하지 않습니다.")
+    if market_close is None:
+        st.error("시장 지수 데이터를 가져오지 못해 예측을 실행할 수 없습니다. 잠시 후 다시 시도해주세요.")
     else:
-        with st.spinner("모델 학습 중..."):
-            accuracy = evaluate_walk_forward(X, y_up)
-            baseline_accuracy = evaluate_baseline_walk_forward(y_up)
-            classifier = train_final_model(X, y_up)
-            up_probability = predict_latest(classifier, latest_row)
+        X, y_up, y_return, latest_row = build_features(df, market_close)
+        if len(X) < 30:
+            st.error("예측을 위한 데이터가 충분하지 않습니다.")
+        else:
+            with st.spinner("모델 학습 중..."):
+                accuracy = evaluate_walk_forward(X, y_up)
+                baseline_accuracy = evaluate_baseline_walk_forward(y_up)
+                classifier = train_final_model(X, y_up)
+                up_probability = predict_latest(classifier, latest_row)
 
-            regressor = train_return_regressor(X, y_return)
-            forecast = forecast_future_prices(df, regressor, n_forecast_days)
+                regressor = train_return_regressor(X, y_return)
+                forecast = forecast_future_prices(df, regressor, n_forecast_days, market_close)
 
 st.plotly_chart(build_chart(display_label, df, display_years, forecast), width="stretch")
 
@@ -140,4 +159,5 @@ if accuracy is not None:
             "근본적인 한계입니다."
         )
     st.caption(f"주황 점선은 {n_forecast_days}일치 예측 종가입니다. 하루 예측을 반복 적용한 값이라 기간이 길수록 오차가 누적됩니다.")
+    st.caption(f"시장 대비 상대강도는 {market_name} 지수({index_code}) 대비 20일 수익률 차이를 특징으로 사용합니다.")
     st.info(DISCLAIMER)
